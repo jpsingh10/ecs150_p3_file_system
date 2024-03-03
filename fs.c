@@ -54,73 +54,89 @@ static struct fat *fatArr;
 static struct rootDir *rootDirArray;
 static struct fileDescriptor *fdTable[FS_OPEN_MAX_COUNT];
 
+
+// -----
+int checkFileName(const char *filename) {
+    // check file name -------------
+    // check if it is null terminated
+    // check if the length of the filename is longer than FS_FILENAME_LEN
+    if(filename[strlen(filename)] != '\0' || strlen(filename) > FS_FILENAME_LEN) {
+        return -1;
+    }
+
+    return 0;
+}
+
+// ---------
+
 int fs_mount(const char *diskname) {
-    /* TODO: Phase 1 */
+	/* TODO: Phase 1 */
     // OPEN diskfile
-    if (block_disk_open(diskname) == -1) {
+    if(block_disk_open(diskname) == -1) {
         return -1;
     }
-    // read superblock --
-    superBlockPtr = (struct superblock *)malloc(sizeof(struct superblock)); //--
-    if (superBlockPtr == NULL) {
-        block_disk_close();
+    
+    superBlockPtr = (struct superblock*)malloc(sizeof(struct superblock)); //--
+    if(superBlockPtr == NULL) {
         return -1;
     }
-    if (block_read(SUPERBLOCK_INDEX, superBlockPtr) == -1) {
-        block_disk_close();
+    // read superblock --    
+    if(block_read(SUPERBLOCK_INDEX, superBlockPtr) == -1) {
         return -1;
     }
-    printf("sig %s\n", superBlockPtr->signature);
+    //printf("sig %s\n", superBlockPtr->signature);
     // check if the signature is equal to "ECS150FS"
-    for (unsigned int i = 0; i < sizeof(superBlockPtr->signature); i++) {
-        if (superBlockPtr->signature[i] != SIGNATURE[i]) {
+    for(unsigned int i = 0; i < sizeof(superBlockPtr->signature); i++) {
+        if(superBlockPtr->signature[i] != SIGNATURE[i]) {
             return -1;
         }
     }
 
-    // read FAT block
-    fatArr = (struct fat *)malloc(superBlockPtr->fatBlocks * BLOCK_SIZE);
-    if (fatArr == NULL) {
-        block_disk_close();
+    fatArr = (struct fat*)malloc(superBlockPtr->fatBlocks * sizeof(struct fat) * ENTRIES_PER_BLOCK);
+    rootDirArray = (struct rootDir*)malloc(FS_FILE_MAX_COUNT * sizeof(struct rootDir));
+    if(fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
-
-    for (unsigned int i = 1; i <= superBlockPtr->fatBlocks; i++) {
-        // printf("i: %d\n", i);
-        if (block_read(i, fatArr + (i - 1) * ENTRIES_PER_BLOCK) == -1) {
-            block_disk_close();
-            return -1;
-        } else if (i == superBlockPtr->fatBlocks &&
-                   (superBlockPtr->dataBlocks % ENTRIES_PER_BLOCK) != 0) {
-            // printf("Last one: %d\n", i);
-            if (block_read(i, fatArr + (i - 1) * (superBlockPtr->dataBlocks %
-                                                  ENTRIES_PER_BLOCK)) == -1) {
-                block_disk_close();
+    
+    // read FAT block
+    int remainingEntries = superBlockPtr->dataBlocks % ENTRIES_PER_BLOCK;
+    //printf("remainingBlock: %d\n", remainingEntries);
+    for(unsigned int i = 1; i <= superBlockPtr->fatBlocks; i++) {
+        //printf("i: %d\n", i);
+        if(remainingEntries == 0) {
+            if(block_read(i , fatArr + ((i - 1) * ENTRIES_PER_BLOCK)) == -1) {
                 return -1;
             }
         }
+        else if(remainingEntries != 0) {
+            //printf("Last one: %d\n", i);
+            if(i < superBlockPtr->fatBlocks) {
+                if(block_read(i , fatArr + ((i - 1) * ENTRIES_PER_BLOCK)) == -1) {
+                    return -1;
+                }
+            }
+            else if(i == superBlockPtr->fatBlocks) {
+                if(block_read(i, fatArr + ((i - 1) * remainingEntries)) == -1) {
+                    return -1;
+                }
+            }
+        }
     }
-    // printf("First entry 0 %d\n", fatArr[0].content);
+    //printf("First entry 0 %d\n", fatArr[0].content);
+    //printf("entry 2048 %d\n", fatArr[2048].content);
     /*
     if(fatArr[0].content == FAT_EOC)
     {
-        printf("Yes it is equal to FAT EOC\n");
+        printf("Yes it is equal to FAT EOC\n"); 
     }
     */
-
-    // Read root directory
-    // printf("Size of root dir: %d\n", sizeof(struct rootDir));
-    rootDirArray =
-        (struct rootDir *)malloc(FS_FILE_MAX_COUNT * sizeof(struct rootDir));
-    if (rootDirArray == NULL) {
-        block_disk_close();
+    
+    // Read root directory 
+    //printf("Size of root dir: %d\n", sizeof(struct rootDir));
+    if(block_read(superBlockPtr->rootIndex, rootDirArray) == -1) {
         return -1;
-    }
-    if (block_read(superBlockPtr->rootIndex, rootDirArray) == -1) {
-        block_disk_close();
-        return -1;
-    }
-    // printf("root dir first data: %d\n", rootDirArray[1].fileSize);
+    } 
+    //printf("root dir first data: %d\n", rootDirArray[1].fileSize);
     /*
     printf("first entry file name: %d\n", rootDirArray[0].fileSize);
     if(strcmp(rootDirArray[0].fileName, "\0") == 0)
@@ -129,46 +145,47 @@ int fs_mount(const char *diskname) {
     }
     */
 
-    return 0;
+	return 0;
 }
 
 int fs_umount(void) {
-    /* TODO: Phase 1 */
-
-    // printf("Unmount:\n");
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
-        // printf("fatArr or rootDirArray is NULL\n");
+	/* TODO: Phase 1 */
+	
+	//printf("Unmount:\n");
+    if(superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
 
-    if (block_disk_close() == -1) {
-        // printf("Unmount block_disk_close() == -1");
-        return -1;
-    }
+    if(block_disk_close() == -1) {
+		return -1;
+	}
+    // check if there are still open file descriptors
+    // ## TO DO LATER
+
     free(superBlockPtr);
     free(fatArr);
     free(rootDirArray);
-
+    
     return 0;
 }
 
 int fs_info(void) {
-    /* TODO: Phase 1 */
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+	/* TODO: Phase 1 */
+    if(superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
     // count free data blocks
     int fatFreeBlockCount = 0;
-    for (unsigned int i = 0; i < superBlockPtr->dataBlocks; i++) {
-        if (fatArr[i].content == 0 && fatArr[i].content != FAT_EOC) {
+    for(unsigned int i = 0; i < superBlockPtr->dataBlocks; i++) {
+        if(fatArr[i].content == 0 && fatArr[i].content != FAT_EOC) {
             fatFreeBlockCount += 1;
         }
     }
     // count free blocks in root dir
-    int rootDirFreeBlockCount = 0;
-    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        if (strcmp(rootDirArray[i].fileName, "\0") == 0) {
-            rootDirFreeBlockCount += 1;
+    int rootDirFreeEntriesCount = 0;
+    for(unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if(strcmp(rootDirArray[i].fileName, "\0") == 0) {
+            rootDirFreeEntriesCount += 1;
         }
     }
 
@@ -178,50 +195,49 @@ int fs_info(void) {
     printf("rdir_blk=%d\n", superBlockPtr->rootIndex);
     printf("data_blk=%d\n", superBlockPtr->dataStart);
     printf("data_blk_count=%d\n", superBlockPtr->dataBlocks);
-    printf("fat_free_ratio=%d/%d\n", fatFreeBlockCount,
-           superBlockPtr->dataBlocks);
-    printf("rdir_free_ratio=%d/%d\n", rootDirFreeBlockCount, FS_FILE_MAX_COUNT);
-
-    // printf("calling fs_create: %d\n", fs_create("hello"));
-
-    return 0;
+    printf("fat_free_ratio=%d/%d\n", fatFreeBlockCount, superBlockPtr->dataBlocks);
+    printf("rdir_free_ratio=%d/%d\n", rootDirFreeEntriesCount, FS_FILE_MAX_COUNT);
+    
+	return 0;
 }
 
 int fs_create(const char *filename) {
-    /* TODO: Phase 2 */
+	/* TODO: Phase 2 */
     // check if FS is mounted
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if(superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
-    // check if it is null terminated
-    for (unsigned int i = 0; i < sizeof(filename); i++) {
-        if (filename[i] == '\0') {
-            return -1;
-        }
-    }
-    // check if the length of the filename is longer than FS_FILENAME_LEN
-    if (strlen(filename) > FS_FILENAME_LEN) {
+    
+    ///*
+    // check if filename is valid
+    if(checkFileName(filename) == -1) {
         return -1;
     }
+
     // check if the file already exists
-    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        if (strcmp(rootDirArray[i].fileName, filename) == 0) {
+    for(unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if(strcmp(rootDirArray[i].fileName, filename) == 0) {
             return -1;
         }
     }
+
     // check if root dir already contains FS_FILE_MAX_COUNT files
     int freeSpace = 0;
-    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        if (strcmp(rootDirArray[i].fileName, filename) == 0) {
+    for(unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if(strcmp(rootDirArray[i].fileName, "\0") == 0)
+        {
             freeSpace += 1;
         }
     }
-    if (freeSpace == 0) {
+    if(freeSpace == 0) {
         return -1;
     }
+    
+
     // create new file
-    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        if (strcmp(rootDirArray[i].fileName, "\0") == 0) {
+    //printf("fileName %s\n", filename);
+    for(unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if(strcmp(rootDirArray[i].fileName, "\0") == 0) {
             strcpy(rootDirArray[i].fileName, filename);
             rootDirArray[i].fileSize = 0;
             rootDirArray[i].firstBlock = FAT_EOC;
@@ -229,50 +245,48 @@ int fs_create(const char *filename) {
         }
     }
 
-    return 0;
+	return 0;
 }
 
-int fs_delete(const char *filename) {
-    /* TODO: Phase 2 */
+int fs_delete(const char *filename)
+{
+	/* TODO: Phase 2 */
     // check if FS is mounted
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if(superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
-
-    // check if the file is valid
-    // check if it is null terminated
-    for (unsigned int i = 0; i < sizeof(filename); i++) {
-        if (filename[i] == '\0') {
-            return -1;
-        }
-    }
-    // check if the length of the filename is longer than FS_FILENAME_LEN
-    if (strlen(filename) > FS_FILENAME_LEN) {
+    
+    // check if filename is valid
+    if(checkFileName(filename) == -1) {
         return -1;
     }
+    
     // check if the file is in root dir
     int found = 0;
     int targetIndex = 0;
-    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        if (strcmp(rootDirArray[i].fileName, filename) == 0) {
+    for(unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if(strcmp(rootDirArray[i].fileName, filename) == 0) {
             found = 1;
             targetIndex = i;
             break;
         }
     }
-    if (found == 0) {
+    if(found == 0) {
         return -1;
     }
-    // check if the file is currently open
-    //## TO DO LATER
 
+
+    // check if the file is currently open  
+    //## TO DO LATER
+    
     // delete the file
     strcpy(rootDirArray[targetIndex].fileName, "\0");
     rootDirArray[targetIndex].fileSize = 0;
-    rootDirArray[targetIndex].firstBlock = 0;
+    rootDirArray[targetIndex].firstBlock = 0; 
 
-    return 0;
+	return 0;
 }
+
 
 int fs_ls(void) {
     /* TODO: Phase 2 */
