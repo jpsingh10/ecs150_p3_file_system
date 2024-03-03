@@ -40,11 +40,19 @@ struct rootDir {
     uint8_t unused[10];
 } __attribute__((packed));
 
+// define fd table
+struct fileDescriptor {
+    uint16_t offet;
+    int index;
+    bool inUse;
+}
+
 // static struct superblock super;
 // static struct superblock *superBlockPtr = &super;
 static struct superblock *superBlockPtr;
 static struct fat *fatArr;
 static struct rootDir *rootDirArray;
+static struct fileDescriptor *fdTable[FS_OPEN_MAX_COUNT];
 
 int fs_mount(const char *diskname) {
     /* TODO: Phase 1 */
@@ -288,20 +296,84 @@ int fs_ls(void) {
 
 int fs_open(const char *filename) {
     /* TODO: Phase 3 */
+    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+        return -1;
+    }
 
-    return 0;
+    // check if file is valid
+    if (filename == NULL || srtcmp(filename) > FS_FILENAME_LEN)
+        return -1;
+
+    // check if the file is in root dir
+    int found = 0;
+    int targetIndeix = -1;
+    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if (strcmp(rootDirArray[i].fileName, filename) == 0) {
+            found = 1;
+            targetIndex = i;
+            break;
+        }
+    }
+    if (!found) {
+        return -1;
+    }
+
+    // Find a free file descriptor
+    int fdIndex = -1;
+    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if (fdTable[i] == NULL) {
+            fdTable[i] = malloc(sizeof(struct fileDescriptor));
+            if (fdTable[i] == NULL) {
+                return -1;
+            }
+            fdIndex = i;
+            break;
+        }
+    }
+
+    if (fdIndex == -1) {
+        return -1; // No available file descriptor slot
+    }
+    // Initialize the file descriptor
+    fdTable[fdIndex]->offset = 0;
+    fdTable[fdIndex]->index = targetIndex;
+    fdTable[fdIndex]->inUse = true;
+
+    return fdIndex;
 }
 
 int fs_close(int fd) {
     /* TODO: Phase 3 */
+    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+        return -1;
+    }
+
+    // Check if the file descriptor is valid
+    if (fdTable < 0 || fdTable >= FS_OPEN_MAX_COUNT || !fdTable[fd]->inUse) {
+        return -1;
+    }
+
+    fdTable[fd]->inUse = false;
+    free(fdTable[fd]);
+    fdTable[fd] = NULL;
 
     return 0;
 }
 
 int fs_stat(int fd) {
     /* TODO: Phase 3 */
+    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+        return -1;
+    }
 
-    return 0;
+    // Check if the file descriptor is valid
+    if (fdTable < 0 || fdTable >= FS_OPEN_MAX_COUNT || !fdTable[fd]->inUse) {
+        return -1;
+    }
+
+    int fileSize = rootDirArray[fdTable[fd]->index].fileSize;
+
+    return fileSize;
 }
 
 int fs_lseek(int fd, size_t offset) {
