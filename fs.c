@@ -145,7 +145,7 @@ int fs_mount(const char *diskname) {
     }
     */
 
-	return 0;
+    return 0;
 }
 
 int fs_umount(void) {
@@ -198,7 +198,7 @@ int fs_info(void) {
     printf("fat_free_ratio=%d/%d\n", fatFreeBlockCount, superBlockPtr->dataBlocks);
     printf("rdir_free_ratio=%d/%d\n", rootDirFreeEntriesCount, FS_FILE_MAX_COUNT);
     
-	return 0;
+    return 0;
 }
 
 int fs_create(const char *filename) {
@@ -245,7 +245,7 @@ int fs_create(const char *filename) {
         }
     }
 
-	return 0;
+    return 0;
 }
 
 int fs_delete(const char *filename)
@@ -284,7 +284,7 @@ int fs_delete(const char *filename)
     rootDirArray[targetIndex].fileSize = 0;
     rootDirArray[targetIndex].firstBlock = 0; 
 
-	return 0;
+    return 0;
 }
 
 
@@ -315,8 +315,9 @@ int fs_open(const char *filename) {
     }
 
     // check if file is valid
-    if (filename == NULL || srtcmp(filename) > FS_FILENAME_LEN)
+    if(checkFileName(filename) == -1) {
         return -1;
+    }
 
     // check if the file is in root dir
     int found = 0;
