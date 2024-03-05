@@ -54,9 +54,8 @@ static struct fat *fatArr;
 static struct rootDir *rootDirArray;
 static struct fileDescriptor *fdTable[FS_OPEN_MAX_COUNT];
 
-// -----
+
 int checkFileName(const char *filename) {
-    // check file name -------------
     // check if it is null terminated
     // check if the length of the filename is longer than FS_FILENAME_LEN
     if (filename[strlen(filename)] != '\0' ||
@@ -67,7 +66,6 @@ int checkFileName(const char *filename) {
     return 0;
 }
 
-// ---------
 
 int fs_mount(const char *diskname) {
     /* TODO: Phase 1 */
@@ -90,6 +88,12 @@ int fs_mount(const char *diskname) {
         if (superBlockPtr->signature[i] != SIGNATURE[i]) {
             return -1;
         }
+    }
+
+    // check if the total number of blocks is equal to what the function block_disk_count() returns
+    if(superBlockPtr->totalBlocks != block_disk_count())
+    {
+        return -1;
     }
 
     fatArr = (struct fat *)malloc(superBlockPtr->fatBlocks *
@@ -124,28 +128,13 @@ int fs_mount(const char *diskname) {
             }
         }
     }
-    // printf("First entry 0 %d\n", fatArr[0].content);
-    // printf("entry 2048 %d\n", fatArr[2048].content);
-    /*
-    if(fatArr[0].content == FAT_EOC)
-    {
-        printf("Yes it is equal to FAT EOC\n");
-    }
-    */
+    
 
     // Read root directory
     // printf("Size of root dir: %d\n", sizeof(struct rootDir));
     if (block_read(superBlockPtr->rootIndex, rootDirArray) == -1) {
         return -1;
     }
-    // printf("root dir first data: %d\n", rootDirArray[1].fileSize);
-    /*
-    printf("first entry file name: %d\n", rootDirArray[0].fileSize);
-    if(strcmp(rootDirArray[0].fileName, "\0") == 0)
-    {
-        printf("File name is NULL \n");
-    }
-    */
 
     return 0;
 }
@@ -163,6 +152,11 @@ int fs_umount(void) {
     }
     // check if there are still open file descriptors
     // ## TO DO LATER
+    for(unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if(fdTable[i] != NULL) {
+            return -1;
+        }
+    }
 
     free(superBlockPtr);
     free(fatArr);
@@ -177,10 +171,10 @@ int fs_info(void) {
         return -1;
     }
     // count free data blocks
-    int fatFreeBlockCount = 0;
+    int fatFreeEntriesCount = 0;
     for (unsigned int i = 0; i < superBlockPtr->dataBlocks; i++) {
         if (fatArr[i].content == 0 && fatArr[i].content != FAT_EOC) {
-            fatFreeBlockCount += 1;
+            fatFreeEntriesCount += 1;
         }
     }
     // count free blocks in root dir
@@ -197,7 +191,7 @@ int fs_info(void) {
     printf("rdir_blk=%d\n", superBlockPtr->rootIndex);
     printf("data_blk=%d\n", superBlockPtr->dataStart);
     printf("data_blk_count=%d\n", superBlockPtr->dataBlocks);
-    printf("fat_free_ratio=%d/%d\n", fatFreeBlockCount,
+    printf("fat_free_ratio=%d/%d\n", fatFreeEntriesCount,
            superBlockPtr->dataBlocks);
     printf("rdir_free_ratio=%d/%d\n", rootDirFreeEntriesCount,
            FS_FILE_MAX_COUNT);
@@ -238,14 +232,18 @@ int fs_create(const char *filename) {
 
     // create new file
     // printf("fileName %s\n", filename);
-    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        if (strcmp(rootDirArray[i].fileName, "\0") == 0) {
+    for(unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if(rootDirArray[i].fileName[0] == '\0') {
             strcpy(rootDirArray[i].fileName, filename);
+            //printf("Index: %d\n", i);
+            //memcpy(rootDirArray[i].fileName, filename, sizeof(filename));
+            //snprintf (rootDirArray[i].fileName, sizeof (rootDirArray[i].fileName), "%s", filename);
             rootDirArray[i].fileSize = 0;
             rootDirArray[i].firstBlock = FAT_EOC;
             break;
         }
     }
+    block_write(superBlockPtr->rootIndex, rootDirArray);
 
     return 0;
 }
@@ -288,7 +286,8 @@ int fs_delete(const char *filename) {
     // delete the file
     strcpy(rootDirArray[targetIndex].fileName, "\0");
     rootDirArray[targetIndex].fileSize = 0;
-    rootDirArray[targetIndex].firstBlock = 0;
+    rootDirArray[targetIndex].firstBlock = 0; 
+    block_write(superBlockPtr->rootIndex, rootDirArray);
 
     return 0;
 }
