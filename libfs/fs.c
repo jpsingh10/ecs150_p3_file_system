@@ -9,7 +9,7 @@
 
 /* TODO: Phase 1 */
 #define SUPERBLOCK_INDEX 0
-#define BLOCK_SIZE 4096
+//#define BLOCK_SIZE 4096
 #define ENTRIES_PER_BLOCK 2048
 #define FAT_EOC 0xFFFF
 #define SIGNATURE "ECS150FS"
