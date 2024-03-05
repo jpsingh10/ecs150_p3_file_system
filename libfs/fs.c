@@ -10,21 +10,24 @@
 /* TODO: Phase 1 */
 #define SUPERBLOCK_INDEX 0
 //#define BLOCK_SIZE 4096
-#define ENTRIES_PER_BLOCK 2048
+#define ENTRIES_PER_BLOCK BLOCK_SIZE / 2
 #define FAT_EOC 0xFFFF
 #define SIGNATURE "ECS150FS"
+#define SIG_LENGTH 8
+#define UNUSED_LENGTH_SUPER 4079
+#define UNUSED_LENGTH_ROOT 10
 
 // Define superblock
 // source:
 // https://www.geeksforgeeks.org/structure-member-alignment-padding-and-data-packing/
 struct superblock {
-    char signature[8];
-    uint16_t totalBlocks;
-    uint16_t rootIndex;
-    uint16_t dataStart;
-    uint16_t dataBlocks;
-    uint8_t fatBlocks;
-    uint8_t unused[4079];
+    char signature[SIG_LENGTH];
+	uint16_t totalBlocks;
+	uint16_t rootIndex;
+	uint16_t dataStart;
+	uint16_t dataBlocks;
+	uint8_t fatBlocks;
+	uint8_t	unused[UNUSED_LENGTH_SUPER];
 } __attribute__((packed));
 
 // Define FAT
@@ -35,9 +38,9 @@ struct fat {
 // Define root directory
 struct rootDir {
     char fileName[FS_FILENAME_LEN];
-    uint32_t fileSize;
-    uint16_t firstBlock;
-    uint8_t unused[10];
+    uint32_t fileSize;             
+    uint16_t firstBlock;          
+    uint8_t unused[UNUSED_LENGTH_ROOT];          
 } __attribute__((packed));
 
 // define fd table
