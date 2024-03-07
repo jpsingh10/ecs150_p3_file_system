@@ -341,6 +341,19 @@ int fs_open(const char *filename) {
         return -1;
     }
 
+    //check if there already %FS_OPEN_MAX_COUNT files currently open
+    // ## Test
+    int availableFDCount = 0;
+    for(unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if(fdTable[i] == NULL) {
+            availableFDCount += 1;
+        }
+
+    }
+    if(availableFDCount == 0) {
+        return -1;
+    }
+
     // Find a free file descriptor
     int fdIndex = -1;
     for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
@@ -429,7 +442,113 @@ int fs_write(int fd, void *buf, size_t count) {
     return 0;
 }
 
-int fs_read(int fd, void *buf, size_t count) {
-    /* TODO: Phase 4 */
-    return 0;
+///*
+int findDataBlockIndex(int fd)
+{
+    
+    //int dataBlockIndexArr[superBlockPtr->dataBlocks]; //#
+    int targetIndex = 0;
+
+    int fileOffset = fdTable[fd]->offset; // current file offset
+
+    int dataBlockNum;
+    dataBlockNum = (fileOffset / BLOCK_SIZE) + 1; // find the postion of the data block based on offset
+
+    int startIndex = rootDirArray[fdTable[fd]->index].firstBlock;  // first data block index
+
+    int count = 1;
+
+    while(fatArr[startIndex].content != 0 && fatArr[startIndex].content != FAT_EOC)
+    {
+        if(count== dataBlockNum)
+        {
+            break;
+        }
+        startIndex = fatArr[startIndex].content;
+        count += 1;
+    }
+
+
+    targetIndex = startIndex; //+ superBlockPtr->dataStart;
+
+    //printf("target index: %d \n", targetIndex);
+
+    return targetIndex;
+
+}
+//*/
+
+int fs_read(int fd, void *buf, size_t count)
+{
+	/* TODO: Phase 4 */
+    
+    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+        return -1;
+    }
+
+    // Check if the file descriptor is valid
+    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL || fdTable[fd]->inUse == 0) {
+        return -1;
+    }
+
+    if(buf == NULL)
+    {
+        return -1;
+    }
+	
+    int bytesRead = 0;
+
+    int dataBlockIndexArr[superBlockPtr->dataBlocks]; 
+    ///*
+    int startIndex = findDataBlockIndex(fd); //rootDirArray[fdTable[fd]->index].firstBlock; //findDataBlockIndex(fd); //
+
+    int index = 0;
+    dataBlockIndexArr[index] = startIndex;
+    index += 1;
+
+    while(fatArr[startIndex].content != 0 && fatArr[startIndex].content != FAT_EOC)
+    { 
+        startIndex = fatArr[startIndex].content;
+
+        dataBlockIndexArr[index] = startIndex;
+
+        index += 1;
+        
+    }
+    
+    // find the real indexes of data block
+    for(unsigned int i = 0; i < index; i++)
+    {
+        dataBlockIndexArr[i] += superBlockPtr->dataStart;
+    }
+
+    char *bounceBuff = malloc(BLOCK_SIZE * (sizeof(dataBlockIndexArr) / sizeof(int))); 
+
+    for(unsigned int i = 0; i < index; i++)
+    {
+        block_read(dataBlockIndexArr[i], bounceBuff + i * BLOCK_SIZE);
+    }
+    
+
+    if(count > BLOCK_SIZE * index)
+    {
+        memcpy(buf, bounceBuff + fdTable[fd]->offset, BLOCK_SIZE * index);
+
+        bytesRead = BLOCK_SIZE * index - fdTable[fd]->offset;
+    }
+    else
+    {
+        memcpy(buf, bounceBuff + fdTable[fd]->offset, count);
+
+        bytesRead = count;
+    }
+
+    // increase the offset
+    fdTable[fd]->offset += bytesRead;
+
+    free(bounceBuff);
+
+	return bytesRead;//*/
+    //return 0;
+
 }
