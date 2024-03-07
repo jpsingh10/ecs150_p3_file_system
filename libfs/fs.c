@@ -22,12 +22,12 @@
 // https://www.geeksforgeeks.org/structure-member-alignment-padding-and-data-packing/
 struct superblock {
     char signature[SIG_LENGTH];
-	uint16_t totalBlocks;
-	uint16_t rootIndex;
-	uint16_t dataStart;
-	uint16_t dataBlocks;
-	uint8_t fatBlocks;
-	uint8_t	unused[UNUSED_LENGTH_SUPER];
+    uint16_t totalBlocks;
+    uint16_t rootIndex;
+    uint16_t dataStart;
+    uint16_t dataBlocks;
+    uint8_t fatBlocks;
+    uint8_t unused[UNUSED_LENGTH_SUPER];
 } __attribute__((packed));
 
 // Define FAT
@@ -38,9 +38,9 @@ struct fat {
 // Define root directory
 struct rootDir {
     char fileName[FS_FILENAME_LEN];
-    uint32_t fileSize;             
-    uint16_t firstBlock;          
-    uint8_t unused[UNUSED_LENGTH_ROOT];          
+    uint32_t fileSize;
+    uint16_t firstBlock;
+    uint8_t unused[UNUSED_LENGTH_ROOT];
 } __attribute__((packed));
 
 // define fd table
@@ -57,7 +57,6 @@ static struct fat *fatArr;
 static struct rootDir *rootDirArray;
 static struct fileDescriptor *fdTable[FS_OPEN_MAX_COUNT];
 
-
 int checkFileName(const char *filename) {
     // check if it is null terminated
     // check if the length of the filename is longer than FS_FILENAME_LEN
@@ -69,6 +68,20 @@ int checkFileName(const char *filename) {
     return 0;
 }
 
+int checkFD(int fd) {
+    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
+        fdTable[fd]->inUse == 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int checkfsMount(void) {
+    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+        return -1;
+    }
+    return 0;
+}
 
 int fs_mount(const char *diskname) {
     /* TODO: Phase 1 */
@@ -77,7 +90,7 @@ int fs_mount(const char *diskname) {
         return -1;
     }
 
-    superBlockPtr = (struct superblock *)malloc(sizeof(struct superblock)); //--
+    superBlockPtr = (struct superblock *)malloc(sizeof(struct superblock));
     if (superBlockPtr == NULL) {
         return -1;
     }
@@ -93,9 +106,9 @@ int fs_mount(const char *diskname) {
         }
     }
 
-    // check if the total number of blocks is equal to what the function block_disk_count() returns
-    if(superBlockPtr->totalBlocks != block_disk_count())
-    {
+    // check if the total number of blocks is equal to what the function
+    // block_disk_count() returns
+    if (superBlockPtr->totalBlocks != block_disk_count()) {
         return -1;
     }
 
@@ -131,7 +144,6 @@ int fs_mount(const char *diskname) {
             }
         }
     }
-    
 
     // Read root directory
     // printf("Size of root dir: %d\n", sizeof(struct rootDir));
@@ -146,7 +158,7 @@ int fs_umount(void) {
     /* TODO: Phase 1 */
 
     // printf("Unmount:\n");
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
@@ -155,8 +167,8 @@ int fs_umount(void) {
     }
     // check if there are still open file descriptors
     // ## TO DO LATER
-    for(unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
-        if(fdTable[i] != NULL) {
+    for (unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if (fdTable[i] != NULL) {
             return -1;
         }
     }
@@ -170,7 +182,7 @@ int fs_umount(void) {
 
 int fs_info(void) {
     /* TODO: Phase 1 */
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
     // count free data blocks
@@ -205,7 +217,7 @@ int fs_info(void) {
 int fs_create(const char *filename) {
     /* TODO: Phase 2 */
     // check if FS is mounted
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
@@ -235,12 +247,13 @@ int fs_create(const char *filename) {
 
     // create new file
     // printf("fileName %s\n", filename);
-    for(unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        if(rootDirArray[i].fileName[0] == '\0') {
+    for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if (rootDirArray[i].fileName[0] == '\0') {
             strcpy(rootDirArray[i].fileName, filename);
-            //printf("Index: %d\n", i);
-            //memcpy(rootDirArray[i].fileName, filename, sizeof(filename));
-            //snprintf (rootDirArray[i].fileName, sizeof (rootDirArray[i].fileName), "%s", filename);
+            // printf("Index: %d\n", i);
+            // memcpy(rootDirArray[i].fileName, filename, sizeof(filename));
+            // snprintf (rootDirArray[i].fileName, sizeof
+            // (rootDirArray[i].fileName), "%s", filename);
             rootDirArray[i].fileSize = 0;
             rootDirArray[i].firstBlock = FAT_EOC;
             break;
@@ -254,7 +267,7 @@ int fs_create(const char *filename) {
 int fs_delete(const char *filename) {
     /* TODO: Phase 2 */
     // check if FS is mounted
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
@@ -289,7 +302,7 @@ int fs_delete(const char *filename) {
     // delete the file
     strcpy(rootDirArray[targetIndex].fileName, "\0");
     rootDirArray[targetIndex].fileSize = 0;
-    rootDirArray[targetIndex].firstBlock = 0; 
+    rootDirArray[targetIndex].firstBlock = 0;
     block_write(superBlockPtr->rootIndex, rootDirArray);
 
     return 0;
@@ -299,7 +312,7 @@ int fs_ls(void) {
     /* TODO: Phase 2 */
     // check if FS is mounted
     // we can move this to a function later on
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
@@ -318,7 +331,7 @@ int fs_ls(void) {
 
 int fs_open(const char *filename) {
     /* TODO: Phase 3 */
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
@@ -341,16 +354,15 @@ int fs_open(const char *filename) {
         return -1;
     }
 
-    //check if there already %FS_OPEN_MAX_COUNT files currently open
-    // ## Test
+    // check if there already %FS_OPEN_MAX_COUNT files currently open
+    //  ## Test
     int availableFDCount = 0;
-    for(unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
-        if(fdTable[i] == NULL) {
+    for (unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if (fdTable[i] == NULL) {
             availableFDCount += 1;
         }
-
     }
-    if(availableFDCount == 0) {
+    if (availableFDCount == 0) {
         return -1;
     }
 
@@ -381,13 +393,12 @@ int fs_open(const char *filename) {
 
 int fs_close(int fd) {
     /* TODO: Phase 3 */
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
     // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
-        !fdTable[fd]->inUse) {
+    if (checkFD(fd) == -1) {
         return -1;
     }
 
@@ -400,13 +411,12 @@ int fs_close(int fd) {
 
 int fs_stat(int fd) {
     /* TODO: Phase 3 */
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
     // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
-        !fdTable[fd]->inUse) {
+    if (checkFD(fd) == -1) {
         return -1;
     }
 
@@ -417,13 +427,12 @@ int fs_stat(int fd) {
 
 int fs_lseek(int fd, size_t offset) {
     /* TODO: Phase 3 */
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+    if (checkfsMount() == -1) {
         return -1;
     }
 
     // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
-        !fdTable[fd]->inUse) {
+    if (checkFD(fd) == -1) {
         return -1;
     }
 
@@ -438,106 +447,110 @@ int fs_lseek(int fd, size_t offset) {
 }
 
 int fs_write(int fd, void *buf, size_t count) {
-    /* TODO: Phase 4 */
+
+    if (checkfsMount() == -1) {
+        return -1;
+    }
+
+    if (checkFD(fd) == -1) {
+        return -1;
+    }
+
+    if (buf == NULL) {
+        return -1;
+    }
+
     return 0;
 }
 
 ///*
-int findDataBlockIndex(int fd)
-{
-    
-    //int dataBlockIndexArr[superBlockPtr->dataBlocks]; //#
+int findDataBlockIndex(int fd) {
+
+    // int dataBlockIndexArr[superBlockPtr->dataBlocks]; //#
     int targetIndex = 0;
 
     int fileOffset = fdTable[fd]->offset; // current file offset
 
     int dataBlockNum;
-    dataBlockNum = (fileOffset / BLOCK_SIZE) + 1; // find the postion of the data block based on offset
+    dataBlockNum = (fileOffset / BLOCK_SIZE) +
+                   1; // find the postion of the data block based on offset
 
-    int startIndex = rootDirArray[fdTable[fd]->index].firstBlock;  // first data block index
+    int startIndex =
+        rootDirArray[fdTable[fd]->index].firstBlock; // first data block index
 
     int count = 1;
 
-    while(fatArr[startIndex].content != 0 && fatArr[startIndex].content != FAT_EOC)
-    {
-        if(count== dataBlockNum)
-        {
+    while (fatArr[startIndex].content != 0 &&
+           fatArr[startIndex].content != FAT_EOC) {
+        if (count == dataBlockNum) {
             break;
         }
         startIndex = fatArr[startIndex].content;
         count += 1;
     }
 
-
     targetIndex = startIndex; //+ superBlockPtr->dataStart;
 
-    //printf("target index: %d \n", targetIndex);
+    // printf("target index: %d \n", targetIndex);
 
     return targetIndex;
-
 }
 //*/
 
-int fs_read(int fd, void *buf, size_t count)
-{
-	/* TODO: Phase 4 */
-    
-    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+int fs_read(int fd, void *buf, size_t count) {
+    /* TODO: Phase 4 */
+
+    if (checkfsMount() == -1) {
         return -1;
     }
 
-    // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL || fdTable[fd]->inUse == 0) {
+    if (checkFD(fd) == -1) {
         return -1;
     }
 
-    if(buf == NULL)
-    {
+    if (buf == NULL) {
         return -1;
     }
-	
+
     int bytesRead = 0;
 
-    int dataBlockIndexArr[superBlockPtr->dataBlocks]; 
+    int dataBlockIndexArr[superBlockPtr->dataBlocks];
     ///*
-    int startIndex = findDataBlockIndex(fd); //rootDirArray[fdTable[fd]->index].firstBlock; //findDataBlockIndex(fd); //
+    // rootDirArray[fdTable[fd]->index].firstBlock; //findDataBlockIndex(fd); //
+    int startIndex = findDataBlockIndex(fd);
 
     int index = 0;
     dataBlockIndexArr[index] = startIndex;
     index += 1;
 
-    while(fatArr[startIndex].content != 0 && fatArr[startIndex].content != FAT_EOC)
-    { 
+    while (fatArr[startIndex].content != 0 &&
+           fatArr[startIndex].content != FAT_EOC) {
         startIndex = fatArr[startIndex].content;
 
         dataBlockIndexArr[index] = startIndex;
 
         index += 1;
-        
     }
-    
+
     // find the real indexes of data block
-    for(unsigned int i = 0; i < index; i++)
-    {
+    for (unsigned int i = 0; i < index; i++) {
         dataBlockIndexArr[i] += superBlockPtr->dataStart;
     }
 
-    char *bounceBuff = malloc(BLOCK_SIZE * (sizeof(dataBlockIndexArr) / sizeof(int))); 
+    char *bounceBuff =
+        malloc(BLOCK_SIZE * (sizeof(dataBlockIndexArr) / sizeof(int)));
 
-    for(unsigned int i = 0; i < index; i++)
-    {
+    for (unsigned int i = 0; i < index; i++) {
         block_read(dataBlockIndexArr[i], bounceBuff + i * BLOCK_SIZE);
     }
-    
 
-    if(count > BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE))
-    {
-        memcpy(buf, bounceBuff + (fdTable[fd]->offset % BLOCK_SIZE), BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE));
+    if (count > BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE)) {
+        memcpy(buf, bounceBuff + (fdTable[fd]->offset % BLOCK_SIZE),
+               BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE));
 
         bytesRead = BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE);
-    }
-    else if(count <= BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE))
-    {
+    } else if (count <=
+               BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE)) {
         memcpy(buf, bounceBuff + (fdTable[fd]->offset % BLOCK_SIZE), count);
 
         bytesRead = count;
@@ -548,7 +561,6 @@ int fs_read(int fd, void *buf, size_t count)
 
     free(bounceBuff);
 
-	return bytesRead;//*/
-    //return 0;
-
+    return bytesRead; //*/
+    // return 0;
 }
