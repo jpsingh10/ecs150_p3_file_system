@@ -530,13 +530,13 @@ int fs_read(int fd, void *buf, size_t count)
     }
     
 
-    if(count > BLOCK_SIZE * index)
+    if(count > BLOCK_SIZE * index - fdTable[fd]->offset)
     {
         memcpy(buf, bounceBuff + fdTable[fd]->offset, BLOCK_SIZE * index - fdTable[fd]->offset);
 
         bytesRead = BLOCK_SIZE * index - fdTable[fd]->offset;
     }
-    else
+    else if(count <= BLOCK_SIZE * index - fdTable[fd]->offset)
     {
         memcpy(buf, bounceBuff + fdTable[fd]->offset, count);
 
