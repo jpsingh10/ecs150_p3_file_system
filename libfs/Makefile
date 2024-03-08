@@ -1,32 +1,31 @@
 # Target library
-lib := libfs.a
-targets := fs disk
-objs := fs.o disk.o
+lib := libuthread.a
 CC := gcc
-CFLAGS := -Wextra -MMD #-Wall
-CFLAGS += -g
-STATICLIB := ar rcs
+targets := fs disk
+objects := fs.o disk.o
 
-ifneq ($(v), 1)
+CFLAGS := -Wall -Wextra -Werror -MMD
+CFLAGS += -g
+
+ifneq ($(V),1)
 Q = @
 endif
 
-all: $(lib) $(objs)
-deps := $(patsubst %.o, %.d, $(objs))
+
+all: $(lib)
+
+deps :=deps := $(patsubst %.o,%.d,$(objects))
 -include $(deps)
+# TODO: Phase 1
 
-$(lib): $(objs)
+%.o: %.c
 	@echo "CC $@"
-	$(Q) $(STATICLIB) $@ $^
+	$(Q)$(CC) $(CFLAGS) -c -o $@ $<
 
-$(targets): $(objs)
+$(lib): $(objects)
 	@echo "CC $@"
-	$(Q) $(CC) $(CFLAGS) -o $@ $<
-
-%.o : %.c 
-	@echo "CC $@"
-	$(Q) $(CC) $(CFLAGS) -c -o $@ $<
+	$(Q) ar rcs $@ $^
 
 clean:
-	@echo "CLEAN"
-	$(Q) rm -f $(lib) $(objs) $(targets) $(deps)
+	@echo "clean"
+	$(Q)rm -f $(targets) $(objects) $(deps) $(lib)
