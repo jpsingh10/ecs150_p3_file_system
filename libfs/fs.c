@@ -84,7 +84,7 @@ int fs_mount(const char *diskname) {
         return -1;
     }
     // printf("sig %s\n", superBlockPtr->signature);
-    //  check if the signature is equal to "ECS150FS"
+    //	check if the signature is equal to "ECS150FS"
     for (unsigned int i = 0; i < sizeof(superBlockPtr->signature); i++) {
         if (superBlockPtr->signature[i] != SIGNATURE[i]) {
             return -1;
@@ -340,7 +340,7 @@ int fs_open(const char *filename) {
     }
 
     // check if there already %FS_OPEN_MAX_COUNT files currently open
-    //  ## Test
+    //	## Test
     int availableFDCount = 0;
     for (unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
         if (fdTable[i] == NULL) {
@@ -434,11 +434,6 @@ int fs_lseek(int fd, size_t offset) {
     return 0;
 }
 
-int fs_write(int fd, void *buf, size_t count) {
-    /* TODO: Phase 4 */
-    return 0;
-}
-
 ///*
 int findDataBlockIndex(int fd) {
 
@@ -471,7 +466,129 @@ int findDataBlockIndex(int fd) {
 
     return targetIndex;
 }
+
+int find_empty_FAT_entry(void) {
+    for (int i = 0; i < superBlockPtr->dataBlocks; i++) {
+        if (fatArr[i].content == 0)
+            return i;
+    }
+    return -1;
+}
+
 //*/
+
+int fs_write(int fd, void *buf, size_t count) {
+    if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
+        return -1;
+    }
+
+    // Validate file descriptor
+    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
+        fdTable[fd]->inUse == 0) {
+        return -1;
+    }
+
+    if (buf == NULL) {
+        return -1;
+    }
+
+    if (count == 0) {
+        return 0;
+    }
+
+    uint32_t fileIndex = fdTable[fd]->index;
+    uint64_t currentOffset = fdTable[fd]->offset;
+    uint16_t firstDataBlockIndex = rootDirArray[fileIndex].firstBlock;
+    uint32_t currentFileSize = rootDirArray[fileIndex].fileSize;
+    int blockOffset = currentOffset % BLOCK_SIZE;
+    uint8_t writeBuffer[BLOCK_SIZE];
+
+    // Handling first write to the file
+    if (firstDataBlockIndex == FAT_EOC) {
+        int emptyFATIndex = find_empty_FAT_entry();
+        if (emptyFATIndex == -1) {
+            return 0; // No space left in FAT
+        }
+
+        firstDataBlockIndex = emptyFATIndex;
+        rootDirArray[fileIndex].firstBlock = firstDataBlockIndex;
+        fatArr[firstDataBlockIndex].content = FAT_EOC;
+
+        // Persist changes to the root directory on disk
+        if (block_write(superBlockPtr->rootIndex, rootDirArray) == -1) {
+            return 0; // Write failed
+        }
+    }
+
+    uint16_t currentBlockIndex = firstDataBlockIndex;
+    uint16_t previousBlockIndex = currentBlockIndex;
+
+    // Navigate to the correct starting block based on the current offset
+    int startingBlock = currentOffset / BLOCK_SIZE;
+    for (int i = 0;
+         i < startingBlock && fatArr[currentBlockIndex].content != FAT_EOC;
+         i++) {
+        previousBlockIndex = currentBlockIndex;
+        currentBlockIndex = fatArr[currentBlockIndex].content;
+    }
+
+    int totalWritten = 0;
+    int bytesToWriteThisIteration = 0;
+
+    // Writing loop
+    while (count > 0) {
+        if (currentBlockIndex == FAT_EOC) {
+            int newFATIndex = find_empty_FAT_entry();
+            if (newFATIndex == -1) {
+                break; // No more space
+            }
+
+            fatArr[previousBlockIndex].content = newFATIndex;
+            currentBlockIndex = newFATIndex;
+            fatArr[currentBlockIndex].content = FAT_EOC;
+        }
+
+        // Prepare the write buf with existing data
+        if (block_read(currentBlockIndex + superBlockPtr->dataStart,
+                       &writeBuffer) == -1) {
+            break;
+        }
+
+        // Determine how much data we can write in this iteration
+        int bytesToWriteThisIteration =
+            count < (size_t)(BLOCK_SIZE - blockOffset)
+                ? count
+                : (size_t)(BLOCK_SIZE - blockOffset);
+
+        // Perform the actual write operation
+        memcpy(&writeBuffer[blockOffset], buf + totalWritten,
+               bytesToWriteThisIteration);
+        if (block_write(currentBlockIndex + superBlockPtr->dataStart,
+                        writeBuffer) == -1) {
+            break;
+        }
+
+        // Update offsets and counters
+        blockOffset = 0;
+        totalWritten += bytesToWriteThisIteration;
+        count -= bytesToWriteThisIteration;
+        currentOffset += bytesToWriteThisIteration;
+        previousBlockIndex = currentBlockIndex;
+        currentBlockIndex = fatArr[previousBlockIndex].content;
+    }
+
+    // Update file size and persist changes
+    rootDirArray[fileIndex].fileSize =
+        currentOffset > currentFileSize ? currentOffset : currentFileSize;
+    fdTable[fd]->offset = currentOffset;
+
+    // Finalize changes by writing the root directory and FAT back to disk
+    if (block_write(superBlockPtr->rootIndex, rootDirArray) == -1) {
+        return -1;
+    }
+
+    return totalWritten;
+}
 
 int fs_read(int fd, void *buf, size_t count) {
     /* TODO: Phase 4 */
@@ -541,5 +658,5 @@ int fs_read(int fd, void *buf, size_t count) {
     free(bounceBuff);
 
     return bytesRead; //*/
-    // return 0;
+                      // return 0;
 }

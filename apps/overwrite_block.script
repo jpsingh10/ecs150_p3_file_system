@@ -1,0 +1,8 @@
+MOUNT
+OPEN	test-file-1
+SEEK	4096
+WRITE	FILE	test-file-2
+SEEK	4096
+READ	4096	FILE	test-file-2
+CLOSE
+UMOUNT

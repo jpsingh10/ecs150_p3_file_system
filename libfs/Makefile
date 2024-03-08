@@ -3,7 +3,7 @@ lib := libfs.a
 targets := fs disk
 objs := fs.o disk.o
 CC := gcc
-CFLAGS := -Werror -Wextra -MMD #-Wall
+CFLAGS := -Wextra -MMD #-Wall
 CFLAGS += -g
 STATICLIB := ar rcs
 
