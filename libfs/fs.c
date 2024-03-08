@@ -475,8 +475,6 @@ int find_empty_FAT_entry(void) {
     return -1;
 }
 
-//*/
-
 int fs_write(int fd, void *buf, size_t count) {
     if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
         return -1;
@@ -488,108 +486,99 @@ int fs_write(int fd, void *buf, size_t count) {
         return -1;
     }
 
-    if (buf == NULL) {
+    if (buf == NULL || count == 0) {
         return -1;
     }
 
-    if (count == 0) {
-        return 0;
-    }
-
-    uint32_t fileIndex = fdTable[fd]->index;
-    uint64_t currentOffset = fdTable[fd]->offset;
-    uint16_t firstDataBlockIndex = rootDirArray[fileIndex].firstBlock;
-    uint32_t currentFileSize = rootDirArray[fileIndex].fileSize;
-    int blockOffset = currentOffset % BLOCK_SIZE;
-    uint8_t writeBuffer[BLOCK_SIZE];
-
-    // Handling first write to the file
-    if (firstDataBlockIndex == FAT_EOC) {
-        int emptyFATIndex = find_empty_FAT_entry();
+    if (rootDirArray[fdTable[fd]->index].firstBlock == FAT_EOC) {
+        int emptyFATIndex = -1;
+        for (int i = 0; i < superBlockPtr->dataBlocks; i++) {
+            if (fatArr[i].content == 0)
+                emptyFATIndex = i;
+        }
         if (emptyFATIndex == -1) {
-            return 0; // No space left in FAT
+            return 0;
         }
 
-        firstDataBlockIndex = emptyFATIndex;
-        rootDirArray[fileIndex].firstBlock = firstDataBlockIndex;
-        fatArr[firstDataBlockIndex].content = FAT_EOC;
+        rootDirArray[fdTable[fd]->index].firstBlock = emptyFATIndex;
+        fatArr[emptyFATIndex].content = FAT_EOC;
 
-        // Persist changes to the root directory on disk
         if (block_write(superBlockPtr->rootIndex, rootDirArray) == -1) {
-            return 0; // Write failed
+            return 0;
         }
     }
 
-    uint16_t currentBlockIndex = firstDataBlockIndex;
+    uint16_t currentBlockIndex = rootDirArray[fdTable[fd]->index].firstBlock;
     uint16_t previousBlockIndex = currentBlockIndex;
 
-    // Navigate to the correct starting block based on the current offset
-    int startingBlock = currentOffset / BLOCK_SIZE;
-    for (int i = 0;
-         i < startingBlock && fatArr[currentBlockIndex].content != FAT_EOC;
+    // go to the block based on the offest
+    for (int i = 0; i < fdTable[fd]->offset / BLOCK_SIZE &&
+                    fatArr[currentBlockIndex].content != FAT_EOC;
          i++) {
         previousBlockIndex = currentBlockIndex;
         currentBlockIndex = fatArr[currentBlockIndex].content;
     }
 
+    uint8_t writeBuffer[BLOCK_SIZE];
     int totalWritten = 0;
-    int bytesToWriteThisIteration = 0;
 
-    // Writing loop
     while (count > 0) {
         if (currentBlockIndex == FAT_EOC) {
-            int newFATIndex = find_empty_FAT_entry();
-            if (newFATIndex == -1) {
-                break; // No more space
+            int newFATIndex = -1;
+
+            for (int i = 0; i < superBlockPtr->dataBlocks; i++) {
+                if (fatArr[i].content == 0)
+                    newFATIndex = i;
             }
+            if (newFATIndex == -1)
+                break;
 
             fatArr[previousBlockIndex].content = newFATIndex;
             currentBlockIndex = newFATIndex;
             fatArr[currentBlockIndex].content = FAT_EOC;
         }
 
-        // Prepare the write buf with existing data
+        // Read current block into buffer to handle partial writes
         if (block_read(currentBlockIndex + superBlockPtr->dataStart,
-                       &writeBuffer) == -1) {
+                       writeBuffer) == -1) {
             break;
         }
 
-        // Determine how much data we can write in this iteration
-        int bytesToWriteThisIteration =
-            count < (size_t)(BLOCK_SIZE - blockOffset)
+        // Determine bytes to write in this iteration
+        size_t bytesToWriteThisIteration =
+            count < (size_t)(BLOCK_SIZE - (fdTable[fd]->offset % BLOCK_SIZE))
                 ? count
-                : (size_t)(BLOCK_SIZE - blockOffset);
+                : (size_t)(BLOCK_SIZE - (fdTable[fd]->offset % BLOCK_SIZE));
 
-        // Perform the actual write operation
-        memcpy(&writeBuffer[blockOffset], buf + totalWritten,
-               bytesToWriteThisIteration);
+        // write the blocks
+        memcpy(writeBuffer + (fdTable[fd]->offset % BLOCK_SIZE),
+               buf + totalWritten, bytesToWriteThisIteration);
         if (block_write(currentBlockIndex + superBlockPtr->dataStart,
                         writeBuffer) == -1) {
             break;
         }
 
-        // Update offsets and counters
-        blockOffset = 0;
+        // Update offsets and count
         totalWritten += bytesToWriteThisIteration;
         count -= bytesToWriteThisIteration;
-        currentOffset += bytesToWriteThisIteration;
+        fdTable[fd]->offset += bytesToWriteThisIteration;
         previousBlockIndex = currentBlockIndex;
         currentBlockIndex = fatArr[previousBlockIndex].content;
     }
 
-    // Update file size and persist changes
-    rootDirArray[fileIndex].fileSize =
-        currentOffset > currentFileSize ? currentOffset : currentFileSize;
-    fdTable[fd]->offset = currentOffset;
+    // Update file size in root directory
+    rootDirArray[fdTable[fd]->index].fileSize =
+        fdTable[fd]->offset > rootDirArray[fdTable[fd]->index].fileSize
+            ? fdTable[fd]->offset
+            : rootDirArray[fdTable[fd]->index].fileSize;
 
-    // Finalize changes by writing the root directory and FAT back to disk
+    // Write root directory and FAT back to disk
     if (block_write(superBlockPtr->rootIndex, rootDirArray) == -1) {
         return -1;
     }
 
     return totalWritten;
 }
-
 int fs_read(int fd, void *buf, size_t count) {
     /* TODO: Phase 4 */
 
