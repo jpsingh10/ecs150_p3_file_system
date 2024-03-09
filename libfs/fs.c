@@ -9,7 +9,6 @@
 
 /* TODO: Phase 1 */
 #define SUPERBLOCK_INDEX 0
-//#define BLOCK_SIZE 4096
 #define ENTRIES_PER_BLOCK BLOCK_SIZE / 2
 #define FAT_EOC 0xFFFF
 #define SIGNATURE "ECS150FS"
@@ -50,8 +49,6 @@ struct fileDescriptor {
     int inUse;
 } __attribute__((packed));
 
-// static struct superblock super;
-// static struct superblock *superBlockPtr = &super;
 static struct superblock *superBlockPtr;
 static struct fat *fatArr;
 static struct rootDir *rootDirArray;
@@ -79,11 +76,11 @@ int fs_mount(const char *diskname) {
     if (superBlockPtr == NULL) {
         return -1;
     }
-    // read superblock --
+    // read superblock 
     if (block_read(SUPERBLOCK_INDEX, superBlockPtr) == -1) {
         return -1;
     }
-    // printf("sig %s\n", superBlockPtr->signature);
+
     //	check if the signature is equal to "ECS150FS"
     for (unsigned int i = 0; i < sizeof(superBlockPtr->signature); i++) {
         if (superBlockPtr->signature[i] != SIGNATURE[i]) {
@@ -107,7 +104,6 @@ int fs_mount(const char *diskname) {
 
     // read FAT block
     int remainingEntries = superBlockPtr->dataBlocks % ENTRIES_PER_BLOCK;
-    // printf("remainingBlock: %d\n", remainingEntries);
     for (unsigned int i = 1; i <= superBlockPtr->fatBlocks; i++) {
         // printf("i: %d\n", i);
         if (remainingEntries == 0) {
@@ -131,7 +127,6 @@ int fs_mount(const char *diskname) {
     }
 
     // Read root directory
-    // printf("Size of root dir: %d\n", sizeof(struct rootDir));
     if (block_read(superBlockPtr->rootIndex, rootDirArray) == -1) {
         return -1;
     }
@@ -141,8 +136,6 @@ int fs_mount(const char *diskname) {
 
 int fs_umount(void) {
     /* TODO: Phase 1 */
-
-    // printf("Unmount:\n");
     if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
@@ -151,7 +144,6 @@ int fs_umount(void) {
         return -1;
     }
     // check if there are still open file descriptors
-    // ## TO DO LATER
     for (unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
         if (fdTable[i] != NULL) {
             return -1;
@@ -170,6 +162,7 @@ int fs_info(void) {
     if (superBlockPtr == NULL || fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
+    
     // count free data blocks
     int fatFreeEntriesCount = 0;
     for (unsigned int i = 0; i < superBlockPtr->dataBlocks; i++) {
@@ -177,6 +170,7 @@ int fs_info(void) {
             fatFreeEntriesCount += 1;
         }
     }
+    
     // count free blocks in root dir
     int rootDirFreeEntriesCount = 0;
     for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
@@ -206,7 +200,6 @@ int fs_create(const char *filename) {
         return -1;
     }
 
-    ///*
     // check if filename is valid
     if (checkFileName(filename) == -1) {
         return -1;
@@ -231,14 +224,9 @@ int fs_create(const char *filename) {
     }
 
     // create new file
-    // printf("fileName %s\n", filename);
     for (unsigned int i = 0; i < FS_FILE_MAX_COUNT; i++) {
         if (rootDirArray[i].fileName[0] == '\0') {
             strcpy(rootDirArray[i].fileName, filename);
-            // printf("Index: %d\n", i);
-            // memcpy(rootDirArray[i].fileName, filename, sizeof(filename));
-            // snprintf (rootDirArray[i].fileName, sizeof
-            // (rootDirArray[i].fileName), "%s", filename);
             rootDirArray[i].fileSize = 0;
             rootDirArray[i].firstBlock = FAT_EOC;
             break;
@@ -276,7 +264,6 @@ int fs_delete(const char *filename) {
     }
 
     // check if the file is currently open
-    //## TO DO LATER
     for (unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
         if (fdTable[i] != NULL && fdTable[i]->index == found &&
             fdTable[i]->inUse) {
@@ -340,7 +327,6 @@ int fs_open(const char *filename) {
     }
 
     // check if there already %FS_OPEN_MAX_COUNT files currently open
-    //	## Test
     int availableFDCount = 0;
     for (unsigned int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
         if (fdTable[i] == NULL) {
@@ -434,10 +420,9 @@ int fs_lseek(int fd, size_t offset) {
     return 0;
 }
 
-///*
+
 int findDataBlockIndex(int fd) {
 
-    // int dataBlockIndexArr[superBlockPtr->dataBlocks]; //#
     int targetIndex = 0;
 
     int fileOffset = fdTable[fd]->offset; // current file offset
@@ -460,9 +445,7 @@ int findDataBlockIndex(int fd) {
         count += 1;
     }
 
-    targetIndex = startIndex; //+ superBlockPtr->dataStart;
-
-    // printf("target index: %d \n", targetIndex);
+    targetIndex = startIndex;
 
     return targetIndex;
 }
@@ -599,10 +582,8 @@ int fs_read(int fd, void *buf, size_t count) {
     int bytesRead = 0;
 
     int dataBlockIndexArr[superBlockPtr->dataBlocks];
-    ///*
     int startIndex =
-        findDataBlockIndex(fd); // rootDirArray[fdTable[fd]->index].firstBlock;
-                                // //findDataBlockIndex(fd); //
+        findDataBlockIndex(fd); 
 
     int index = 0;
     dataBlockIndexArr[index] = startIndex;
