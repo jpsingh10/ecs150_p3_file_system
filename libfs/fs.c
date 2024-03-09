@@ -72,7 +72,7 @@ int fs_mount(const char *diskname) {
         return -1;
     }
 
-    superBlockPtr = (struct superblock *)malloc(sizeof(struct superblock)); //--
+    superBlockPtr = (struct superblock *)malloc(sizeof(struct superblock)); 
     if (superBlockPtr == NULL) {
         return -1;
     }
@@ -94,10 +94,8 @@ int fs_mount(const char *diskname) {
         return -1;
     }
 
-    fatArr = (struct fat *)malloc(superBlockPtr->fatBlocks *
-                                  sizeof(struct fat) * ENTRIES_PER_BLOCK);
-    rootDirArray =
-        (struct rootDir *)malloc(FS_FILE_MAX_COUNT * sizeof(struct rootDir));
+    fatArr = (struct fat *)malloc(superBlockPtr->fatBlocks * sizeof(struct fat) * ENTRIES_PER_BLOCK);
+    rootDirArray = (struct rootDir *)malloc(FS_FILE_MAX_COUNT * sizeof(struct rootDir));
     if (fatArr == NULL || rootDirArray == NULL) {
         return -1;
     }
@@ -105,21 +103,17 @@ int fs_mount(const char *diskname) {
     // read FAT block
     int remainingEntries = superBlockPtr->dataBlocks % ENTRIES_PER_BLOCK;
     for (unsigned int i = 1; i <= superBlockPtr->fatBlocks; i++) {
-        // printf("i: %d\n", i);
         if (remainingEntries == 0) {
             if (block_read(i, fatArr + ((i - 1) * ENTRIES_PER_BLOCK)) == -1) {
                 return -1;
             }
         } else if (remainingEntries != 0) {
-            // printf("Last one: %d\n", i);
             if (i < superBlockPtr->fatBlocks) {
-                if (block_read(i, fatArr + ((i - 1) * ENTRIES_PER_BLOCK)) ==
-                    -1) {
+                if (block_read(i, fatArr + ((i - 1) * ENTRIES_PER_BLOCK)) == -1) {
                     return -1;
                 }
             } else if (i == superBlockPtr->fatBlocks) {
-                if (block_read(i, fatArr + ((i - 1) * remainingEntries)) ==
-                    -1) {
+                if (block_read(i, fatArr + ((i - 1) * remainingEntries)) == -1) {
                     return -1;
                 }
             }
@@ -369,8 +363,7 @@ int fs_close(int fd) {
     }
 
     // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
-        !fdTable[fd]->inUse) {
+    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL || !fdTable[fd]->inUse) {
         return -1;
     }
 
@@ -388,8 +381,7 @@ int fs_stat(int fd) {
     }
 
     // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
-        !fdTable[fd]->inUse) {
+    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL || !fdTable[fd]->inUse) {
         return -1;
     }
 
@@ -405,8 +397,7 @@ int fs_lseek(int fd, size_t offset) {
     }
 
     // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
-        !fdTable[fd]->inUse) {
+    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL || !fdTable[fd]->inUse) {
         return -1;
     }
 
@@ -428,16 +419,12 @@ int findDataBlockIndex(int fd) {
     int fileOffset = fdTable[fd]->offset; // current file offset
 
     int dataBlockNum;
-    dataBlockNum = (fileOffset / BLOCK_SIZE) +
-                   1; // find the postion of the data block based on offset
+    dataBlockNum = (fileOffset / BLOCK_SIZE) + 1; // find the postion of the data block based on offset
 
-    int startIndex =
-        rootDirArray[fdTable[fd]->index].firstBlock; // first data block index
+    int startIndex = rootDirArray[fdTable[fd]->index].firstBlock; // first data block index
 
     int count = 1;
-
-    while (fatArr[startIndex].content != 0 &&
-           fatArr[startIndex].content != FAT_EOC) {
+    while (fatArr[startIndex].content != 0 && fatArr[startIndex].content != FAT_EOC) {
         if (count == dataBlockNum) {
             break;
         }
@@ -570,8 +557,7 @@ int fs_read(int fd, void *buf, size_t count) {
     }
 
     // Check if the file descriptor is valid
-    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL ||
-        fdTable[fd]->inUse == 0) {
+    if (fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd] == NULL || fdTable[fd]->inUse == 0) {
         return -1;
     }
 
@@ -582,15 +568,13 @@ int fs_read(int fd, void *buf, size_t count) {
     int bytesRead = 0;
 
     int dataBlockIndexArr[superBlockPtr->dataBlocks];
-    int startIndex =
-        findDataBlockIndex(fd); 
+    int startIndex = findDataBlockIndex(fd); 
 
     int index = 0;
     dataBlockIndexArr[index] = startIndex;
     index += 1;
 
-    while (fatArr[startIndex].content != 0 &&
-           fatArr[startIndex].content != FAT_EOC) {
+    while (fatArr[startIndex].content != 0 && fatArr[startIndex].content != FAT_EOC) {
         startIndex = fatArr[startIndex].content;
 
         dataBlockIndexArr[index] = startIndex;
@@ -603,20 +587,17 @@ int fs_read(int fd, void *buf, size_t count) {
         dataBlockIndexArr[i] += superBlockPtr->dataStart;
     }
 
-    char *bounceBuff =
-        malloc(BLOCK_SIZE * (sizeof(dataBlockIndexArr) / sizeof(int)));
+    char *bounceBuff = malloc(BLOCK_SIZE * (sizeof(dataBlockIndexArr) / sizeof(int)));
 
     for (int i = 0; i < index; i++) {
         block_read(dataBlockIndexArr[i], bounceBuff + i * BLOCK_SIZE);
     }
 
     if (count > (size_t)(BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE))) {
-        memcpy(buf, bounceBuff + (fdTable[fd]->offset % BLOCK_SIZE),
-               BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE));
+        memcpy(buf, bounceBuff + (fdTable[fd]->offset % BLOCK_SIZE), BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE));
 
         bytesRead = BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE);
-    } else if (count <=
-               (size_t)(BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE))) {
+    } else if (count <= (size_t)(BLOCK_SIZE * index - (fdTable[fd]->offset % BLOCK_SIZE))) {
         memcpy(buf, bounceBuff + (fdTable[fd]->offset % BLOCK_SIZE), count);
 
         bytesRead = count;
@@ -627,6 +608,5 @@ int fs_read(int fd, void *buf, size_t count) {
 
     free(bounceBuff);
 
-    return bytesRead; //*/
-                      // return 0;
+    return bytesRead; 
 }
