@@ -57,8 +57,7 @@ static struct fileDescriptor *fdTable[FS_OPEN_MAX_COUNT];
 int checkFileName(const char *filename) {
     // check if it is null terminated
     // check if the length of the filename is longer than FS_FILENAME_LEN
-    if (filename[strlen(filename)] != '\0' ||
-        strlen(filename) > FS_FILENAME_LEN) {
+    if (filename[strlen(filename)] != '\0' || strlen(filename) > FS_FILENAME_LEN) {
         return -1;
     }
 
